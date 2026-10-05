@@ -10,7 +10,7 @@
 	<packaging>jar</packaging>
 
 	<name>ra-tor</name>
-	<url>https://resolvingarchitecture.dev</url>
+	<url>https://resolvingarchitecture.io</url>
 	<description>Resolving Architecture - TOR Client</description>
 	<inceptionYear>2018</inceptionYear>
 
