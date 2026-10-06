@@ -51,10 +51,16 @@ public class TORControlConnection implements TORControlCommands {
         List<ReplyLine> response; // Locking: this
 
         List<ReplyLine> getResponse() throws InterruptedException, TimeoutException {
+            long remainingNanos = TimeUnit.MINUTES.toNanos(1);
             lock.lock();
             try {
-                if(!dataReady.await(1, TimeUnit.MINUTES))
-                    throw new TimeoutException();
+                // Guard on the state, not just the signal: the reply can be delivered (and
+                // signalAll() called) before this thread reaches await(), and a bare await()
+                // would then sleep the full timeout on a response that is already here.
+                while (response == null) {
+                    if (remainingNanos <= 0) throw new TimeoutException();
+                    remainingNanos = dataReady.awaitNanos(remainingNanos);
+                }
                 return response;
             } finally {
                 lock.unlock();
