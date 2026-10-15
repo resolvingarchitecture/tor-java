@@ -97,6 +97,32 @@ class TorSocksRelayTest {
         assertTrue(relay.egressLikelyBlocked(), "10/10 failed attempts should report likely blocked");
     }
 
+    @Test
+    void theBlockedSignalClearsOnceTheFailuresAreStale() throws Exception {
+        upstream = new FakeUpstreamSocks(false);
+        upstream.start();
+        int relayPort = freePort();
+        java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(1_000_000L);
+        relay = new TorSocksRelay(relayPort, "127.0.0.1", upstream.port(), now::get);
+        relay.start();
+
+        for (int i = 0; i < 10; i++) {
+            try {
+                connectThroughRelayAndExchange(relayPort, "127.0.0.1", 1, new byte[0]);
+            } catch (IOException ignored) {
+                // expected
+            }
+        }
+        assertTrue(relay.egressLikelyBlocked(), "10/10 recent failures should report likely blocked");
+
+        now.addAndGet(TorSocksRelay.OUTCOME_STALE_AFTER_MS - 1);
+        assertTrue(relay.egressLikelyBlocked(), "still blocked just inside the stale window");
+
+        now.addAndGet(2);
+        assertFalse(relay.egressLikelyBlocked(),
+                "with no traffic recording new outcomes, stale failures must stop counting so Tor can be tried again");
+    }
+
     /** Connects to the relay listening on {@code relayPort} as a SOCKS5 client, asks it to CONNECT to {@code host:port}, writes {@code payload}, and returns whatever comes back. */
     private static byte[] connectThroughRelayAndExchange(int relayPort, String host, int port, byte[] payload) throws IOException {
         Socket s = new Socket(new Proxy(Proxy.Type.SOCKS, new InetSocketAddress("127.0.0.1", relayPort)));

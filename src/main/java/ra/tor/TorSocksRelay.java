@@ -62,6 +62,13 @@ public final class TorSocksRelay {
     /** {@code >=} this many of the last {@link #OUTCOME_WINDOW} attempts failing counts as "likely blocked." */
     private static final int BLOCKED_FAILURE_THRESHOLD = 8;
     private static final int UPSTREAM_CONNECT_TIMEOUT_MS = 20_000;
+    /**
+     * An outcome older than this no longer counts toward {@link #egressLikelyBlocked()}. Without it the signal
+     * latches: once it reports "blocked" the caller stops sending traffic through this relay, so no further
+     * outcome is ever recorded and it can never report "not blocked" again, even after Tor recovers. With it,
+     * the caller gets to try Tor again once the failures are stale.
+     */
+    static final long OUTCOME_STALE_AFTER_MS = 3 * 60_000L;
 
     private final int port;
     private final String upstreamHost;
@@ -71,6 +78,8 @@ public final class TorSocksRelay {
     private final ExecutorService connectionExecutor =
             Executors.newCachedThreadPool(r -> new Thread(r, "TorSocksRelay-Connection"));
     private final boolean[] recentOutcomes = new boolean[OUTCOME_WINDOW]; // true = success
+    private final long[] outcomeTimes = new long[OUTCOME_WINDOW]; // when each outcome was recorded
+    private final java.util.function.LongSupplier clock;
     private final AtomicInteger outcomeCursor = new AtomicInteger();
     private final AtomicInteger outcomesRecorded = new AtomicInteger();
 
@@ -78,6 +87,12 @@ public final class TorSocksRelay {
 
     /** Relays through {@code upstreamHost}:{@code upstreamPort} - {@link TORClientService} passes its embedded Tor process's own (dynamically-chosen) SOCKS port; tests point this at a fake upstream instead. */
     public TorSocksRelay(int port, String upstreamHost, int upstreamPort) {
+        this(port, upstreamHost, upstreamPort, System::currentTimeMillis);
+    }
+
+    /** As above, with the clock supplied - so a test can age outcomes without waiting. */
+    TorSocksRelay(int port, String upstreamHost, int upstreamPort, java.util.function.LongSupplier clock) {
+        this.clock = clock;
         this.port = port;
         this.upstreamHost = upstreamHost;
         this.upstreamPort = upstreamPort;
@@ -101,22 +116,30 @@ public final class TorSocksRelay {
 
     /**
      * True once at least {@link #OUTCOME_WINDOW} attempts have been made and
-     * {@link #BLOCKED_FAILURE_THRESHOLD} or more of the most recent ones failed.
+     * {@link #BLOCKED_FAILURE_THRESHOLD} or more of the most recent ones failed
+     * <em>within the last {@link #OUTCOME_STALE_AFTER_MS}</em>.
      * Deliberately requires a full window before ever reporting true, so a
-     * freshly-started relay with no history yet doesn't look blocked.
+     * freshly-started relay with no history yet doesn't look blocked; and ignores
+     * stale outcomes, so it recovers on its own - see {@link #OUTCOME_STALE_AFTER_MS}.
      */
     public boolean egressLikelyBlocked() {
         if (outcomesRecorded.get() < OUTCOME_WINDOW) return false;
+        long cutoff = clock.getAsLong() - OUTCOME_STALE_AFTER_MS;
         int failures = 0;
         synchronized (recentOutcomes) {
-            for (boolean success : recentOutcomes) if (!success) failures++;
+            for (int i = 0; i < OUTCOME_WINDOW; i++) {
+                if (!recentOutcomes[i] && outcomeTimes[i] >= cutoff) failures++;
+            }
         }
         return failures >= BLOCKED_FAILURE_THRESHOLD;
     }
 
     private void recordOutcome(boolean success) {
         int i = Math.floorMod(outcomeCursor.getAndIncrement(), OUTCOME_WINDOW);
-        synchronized (recentOutcomes) { recentOutcomes[i] = success; }
+        synchronized (recentOutcomes) {
+            recentOutcomes[i] = success;
+            outcomeTimes[i] = clock.getAsLong();
+        }
         outcomesRecorded.incrementAndGet();
     }
 
