@@ -40,7 +40,7 @@ a fully bootstrapped, privately-owned Tor process, or fails cleanly (`UNAVAILABL
 The SHA-256 values in `TorBinary` were copied in only after verifying Tor Project's own
 signed `sha256sums-signed-build.txt` against the **Tor Browser Developers signing key**
 (fingerprint `EF6E286DDA85EA2A4BA7DE684E2C6E8793298290`) on 2026-09-26, for Tor
-`15.0.23`. From that point on, `TorBinary.java` - reviewed and version-controlled like
+`15.0.25`. From that point on, `TorBinary.java` - reviewed and version-controlled like
 any other source file - is the actual trust anchor; the download itself is never trusted
 on its own. Re-verify the same way (`gpg --verify` against that key) before bumping the
 pinned version.

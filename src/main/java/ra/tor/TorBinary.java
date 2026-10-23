@@ -46,16 +46,16 @@ public final class TorBinary {
 
     private static final Logger LOG = Logger.getLogger(TorBinary.class.getName());
 
-    static final String TOR_VERSION = "15.0.23";
+    static final String TOR_VERSION = "15.0.25";
     private static final String DIST_BASE = "https://dist.torproject.org/torbrowser/" + TOR_VERSION + "/";
 
     private enum Platform {
-        LINUX_X86_64("linux-x86_64", "08d49de27f542b8f73e2014e064d8320562b5d20019c03d4725c5a5249d97985"),
-        LINUX_I686("linux-i686", "af684a8839d61778b5722938e43cc0c1cc9886f8fd8b7fb33d056077363edfba"),
-        MACOS_X86_64("macos-x86_64", "be1be1cb13cd093713f02a0beade0d2471b61119011bfeb0efc08353eadf2e4e"),
-        MACOS_AARCH64("macos-aarch64", "e8ea3f667c83309abad34280f0f9e1cfae52843da6b8db111ca15d6221051db5"),
-        WINDOWS_X86_64("windows-x86_64", "231dad6b9cb401a54c260db7046965ef04e4f72ff071b140d423fb5da281ab1e"),
-        WINDOWS_I686("windows-i686", "1e4de9a4f1d99b8f40b5e0c75f3dcc3ea51b0aeab040d48fd23881e9fa94979a");
+        LINUX_X86_64("linux-x86_64", "19cf18726eecb362e0f21d27afa9ea9efe5da928bfdfbb1ceb5fe54519e87f4a"),
+        LINUX_I686("linux-i686", "e3195aa30946de60b1a31ef584f2e8bc2623a99815f4a102a89257a01bef9a77"),
+        MACOS_X86_64("macos-x86_64", "e1ae4d4a734d28bb590839188511deb3cebc26fcbce9df66d01b2c452060fe95"),
+        MACOS_AARCH64("macos-aarch64", "a3febb6179152b0b4f56a0f5cc57bf5cc8ecef7db35e7c3e9d5a044c8158c26c"),
+        WINDOWS_X86_64("windows-x86_64", "c1988c701de2f24f7d098d1d6d7f507b58f27740d097f29c246e0524d639b252"),
+        WINDOWS_I686("windows-i686", "55a1e4c9b6df47c6e5fde1b3d755c858374d6cc0809c1dd1533a8622bb52de96");
 
         final String key;
         final String sha256;
@@ -97,12 +97,12 @@ public final class TorBinary {
 
     private final File cacheRoot;
 
-    TorBinary(File cacheRoot) {
+    public TorBinary(File cacheRoot) {
         this.cacheRoot = cacheRoot;
     }
 
     /** Downloads (if not already cached and verified) and returns paths into the real Tor Project binary for this OS/arch. */
-    Provisioned resolve() throws IOException {
+    public Provisioned resolve() throws IOException {
         Platform platform = detectPlatform();
         File platformDir = new File(cacheRoot, TOR_VERSION + File.separator + platform.key);
         File verifiedMarker = new File(platformDir, ".verified-" + platform.sha256.substring(0, 12));
