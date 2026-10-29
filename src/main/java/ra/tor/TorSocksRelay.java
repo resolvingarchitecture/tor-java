@@ -250,6 +250,10 @@ public final class TorSocksRelay {
             Target target = readConnectRequest(in, out);
             if (target == null) return;
 
+            // Only a connection that leaves Tor through an exit says anything about whether exits can be reached. A connection to an
+            // onion address never uses one, and fails whenever the other end is off, which is not Tor being blocked: counting those
+            // made a few offline contacts look like a blocked Tor and switched it off for everything that watches this signal.
+            boolean usesAnExit = !target.host.toLowerCase(java.util.Locale.ROOT).endsWith(".onion");
             Socket upstream;
             try {
                 upstream = new Socket(new Proxy(Proxy.Type.SOCKS,
@@ -257,11 +261,11 @@ public final class TorSocksRelay {
                 upstream.connect(InetSocketAddress.createUnresolved(target.host, target.port), UPSTREAM_CONNECT_TIMEOUT_MS);
             } catch (IOException e) {
                 LOG.warning("upstream connect to " + target.host + ":" + target.port + " failed: " + e.getMessage());
-                recordOutcome(false);
+                if (usesAnExit) recordOutcome(false);
                 reply(out, REP_GENERAL_FAILURE);
                 return;
             }
-            recordOutcome(true);
+            if (usesAnExit) recordOutcome(true);
             try (Socket u = upstream) {
                 reply(out, REP_SUCCEEDED);
                 c.setSoTimeout(0);

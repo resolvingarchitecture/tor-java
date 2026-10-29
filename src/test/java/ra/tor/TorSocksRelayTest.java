@@ -123,6 +123,43 @@ class TorSocksRelayTest {
                 "with no traffic recording new outcomes, stale failures must stop counting so Tor can be tried again");
     }
 
+    @Test
+    void failedConnectionsToOnionAddressesDoNotCountAsABlockedTor() throws Exception {
+        upstream = new FakeUpstreamSocks(false); // every CONNECT fails: contacts that are off
+        upstream.start();
+        int relayPort = freePort();
+        relay = new TorSocksRelay(relayPort, "127.0.0.1", upstream.port());
+        relay.start();
+
+        for (int i = 0; i < 20; i++) {
+            try {
+                connectByName(relayPort, "6lz4tyuib6762z3iqvpnzsfb5gcy2yoqsvwwsleou5bvmqktk5ueftad.onion", 5252);
+            } catch (IOException ignored) {
+                // expected: the upstream refuses
+            }
+        }
+        assertFalse(relay.egressLikelyBlocked(), "twenty unreachable onion addresses are contacts being off, not Tor being blocked");
+
+        for (int i = 0; i < 10; i++) {
+            try {
+                connectByName(relayPort, "example.com", 443);
+            } catch (IOException ignored) {
+                // expected
+            }
+        }
+        assertTrue(relay.egressLikelyBlocked(), "ten failed connections to ordinary hosts still do");
+    }
+
+    /** Asks the relay to CONNECT to a host by name (the relay, not this test, resolves it), as a client going through Tor does. */
+    private static void connectByName(int relayPort, String host, int port) throws IOException {
+        Socket s = new Socket(new Proxy(Proxy.Type.SOCKS, new InetSocketAddress("127.0.0.1", relayPort)));
+        try {
+            s.connect(InetSocketAddress.createUnresolved(host, port), 5000);
+        } finally {
+            s.close();
+        }
+    }
+
     /** Connects to the relay listening on {@code relayPort} as a SOCKS5 client, asks it to CONNECT to {@code host:port}, writes {@code payload}, and returns whatever comes back. */
     private static byte[] connectThroughRelayAndExchange(int relayPort, String host, int port, byte[] payload) throws IOException {
         Socket s = new Socket(new Proxy(Proxy.Type.SOCKS, new InetSocketAddress("127.0.0.1", relayPort)));
